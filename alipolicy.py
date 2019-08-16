@@ -17,6 +17,7 @@ from matplotlib import pyplot as plt
 nm = 41
 no_pv = 5
 
+print("aliwhore")
 
 total_iteration = 100
 
