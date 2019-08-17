@@ -7,6 +7,10 @@ import numpy as np
 
 from networkmpc import mpc
 import scipy.io as sio
+import tensorflow as tf
+
+from scipy.stats import truncnorm
+
 
 from scipy.stats import multivariate_normal
 
@@ -17,7 +21,6 @@ from matplotlib import pyplot as plt
 nm = 41
 no_pv = 5
 
-print("alireza do it now")
 
 total_iteration = 100
 
@@ -29,6 +32,7 @@ bus, branch = mpc(pf, beta)
 from_to = branch[:, 0:2]
 pv_bus = np.array([bus[1, 11], bus[14, 11], bus[15, 11], bus[17, 11], bus[18, 11]])
 pv_set = np.array([1, 14, 15, 17, 18])
+qg_min, qg_max = np.float32(bus[pv_set, 12]), np.float32(bus[pv_set, 11])
 
 
 r = np.zeros((nm, 1))
@@ -65,9 +69,24 @@ print(np.shape(data_set))
 lower = np.zeros((no_pv, 1))
 upper = pv_bus
 
+
+#############################################################################
+def draw_sample(mean_var):
+    sh = np.shape(mean_var)[0]
+    qg_draw = np.zeros((sh, no_pv))
+    for i_temp in range(sh):
+        for j in range(no_pv):
+            a, b = (qg_min[j] - mean_var[i_temp, j])/np.abs(mean_var[i_temp, no_pv+j]), \
+                   (qg_max[j] - mean_var[i_temp, j])/np.abs(mean_var[i_temp, no_pv+j])
+            qg_draw[i_temp, j] = truncnorm.rvs(a, b, loc=mean_var[i_temp, j],
+                                               scale=np.abs(mean_var[i_temp, no_pv+j]), size=1)
+    return np.float32(qg_draw)
+
+    
 #############################################################################
 
-no_trajectories = 10
+
+no_trajectories = 3
 H1, H3 = 50, 2*no_pv
 epoch = 1
 
@@ -76,12 +95,17 @@ inputs = Input(shape=(x_dim,))
 
 
 # Define custom loss
-def customized_loss(obj, qg):
+def customized_loss(tr_qg):
     # Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
     def loss_dual(y_true, y_pred):
-        return ke.mean(losses.hinge(y_true, y_pred)) #+ np.tensordot(obj,
-                                                     #              multivariate_normal.pdf(qg, mean=y_pred[:, 0:no_pv], cov=y_pred[:, no_pv:]), axes=[0, 1])
-         #pdf(qg_local, lower, upper, loc=y_pred[0:no_pv], scale=y_pred[no_pv:]), axes=[0, 1])
+        log_pi = np.zeros(no_trajectories)
+
+        for i_col in range(no_trajectories):
+            log_pi[i_col] = truncnorm.pdf(tr_qg, qg_min, qg_max, loc=y_pred[i_col, 0:no_pv], scale=y_pred[i_col, no_pv:])
+        return 0 * ke.mean(y_true-y_pred) + np.sum(y_true * truncnorm.pdf(tr_qg, qg_min,
+                                                                                qg_max, loc=y_pred[i_col, 0:no_pv],
+                                             scale=y_pred[:, no_pv:]))
+
     return loss_dual
 
 
@@ -93,7 +117,7 @@ x1 = Dense(H1, activation='relu', kernel_initializer='random_uniform', bias_init
 predictions = Dense(H3, activation='linear', kernel_initializer='random_uniform', bias_initializer='zeros')(x1)
 
 model = Model(inputs=inputs, outputs=predictions)
-model.compile(optimizer='SGD', loss=customized_loss(obj_local, qg_local))
+model.compile(optimizer='SGD', loss=customized_loss(qg_local))
 
 features = np.random.normal(loc=0, scale=1.0, size=(no_trajectories, x_dim))
 labels = np.zeros((no_trajectories, 2*no_pv))
@@ -110,29 +134,22 @@ for iterations in range(total_iteration):
     predicted_mu = predicted_output[:, 0:no_pv]
     predicted_sigma = predicted_output[:, no_pv:]
 
-    # for i in range(no_trajectories):
-    #     qg_local[i] = truncnorm.rvs(lower, upper, loc=predicted_mu, scale=predicted_sigma)
-    #     p_local[i, :] = inputs[0:nm]
-    #     q_local[i, :] = qg_local - inputs[nm:]
-    #     obj_local[i] = cvx_fun(p_local[i, :], q_local[i, :], r, R, X, A, a0, v0, bus, branch, nm)
-
     for i in range(no_trajectories):
 
-        print(np.random.multivariate_normal(mean=predicted_mu[i, :], cov=np.diag(predicted_sigma[i, :])))
-        qg_local_temp = np.random.multivariate_normal(mean=predicted_mu[i, :], cov=np.diag(predicted_sigma[i, :]))
-        qg_local[i, :] = np.clip(qg_local_temp, -.1, .1)
+        qg_local = draw_sample(predicted_output)
         q_local = -qc_local
 
         q_local[i, pv_set] = qg_local[i, :] - qc_local[i, pv_set]
         obj_local[i] = cvx_fun(p_local[i, :], q_local[i, :], r, R, X, A, A_inv, a0, v0, bus, nm)
         print(obj_local[i])
 
-    model.compile(optimizer="Adam", loss=customized_loss(obj_local, qg_local))
+    model.compile(optimizer="Adam", loss=customized_loss(qg_local))
     weights = model.get_weights()
 
     model.set_weights(weights)
-    labels = np.zeros((no_trajectories, 2*no_pv))
-    model.fit(x_local, labels, epochs=epoch)
+    # labels = np.zeros((no_trajectories, 2*no_pv))
+    y_true = obj_local
+    model.fit(x_local, y_true, epochs=epoch)
 
 
 # # print("Train is running ...")
