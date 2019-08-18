@@ -14,9 +14,9 @@ from scipy.stats import truncnorm
 
 nm = 41
 no_pv = 5
-pf = 0.9
-alpha = 0.1
-beta = 0.1
+pf = 0.8
+alpha = 0.8
+beta = 0.2
 
 no_trajectories = 1
 
@@ -24,7 +24,7 @@ bus, branch = mpc(pf, beta)
 from_to = branch[:, 0:2]
 pv_bus = np.array([bus[1, 11], bus[14, 11], bus[15, 11], bus[17, 11], bus[18, 11]])
 pv_set = np.array([1, 14, 15, 17, 18])
-qg_min, qg_max = np.float32(bus[pv_set, 12]), np.float32(bus[pv_set, 11])
+qg_min, qg_max = 2*np.float32(bus[pv_set, 12]), 20*np.float32(bus[pv_set, 11])
 
 r = np.zeros((nm, 1))
 x = np.zeros((nm, 1))
@@ -41,7 +41,6 @@ for i in range(nm):
 a0 = A_tilde[:, 0]
 A = A_tilde[:, 1:]
 A_inv = np.linalg.inv(A)
-
 R = np.diagflat(r)
 X = np.diagflat(x)
 v0 = np.ones(1)
@@ -178,50 +177,32 @@ class Agent(object):
         self.train_fn([S, action_onehot, discount_reward])
 
 
-def run_episode(agent):
+def run_episode(x_sample, agent):
 
-    done = False
+    p_sample = x_sample[0:nm]
+    qc_sample = x_sample[nm:]
+
+    s = x_sample
+    a = agent.get_action(s)
+    q_sample = -qc_sample
+
+    q_sample[pv_set] = a - qc_sample[pv_set]
+    rr = 1 ## np.squeeze(cvx_fun(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm))
 
     set_state = []
     set_action = []
     set_reward = []
 
-    r_init = np.random.randint(1, 1000)
-    s = data_set[r_init, :]
-    total_reward = 0
+    set_state.append(s)
+    set_action.append(a)
+    set_reward.append(rr)
 
-    while not done:
+    set_state = np.array(set_state)
+    set_action = np.array(set_action)
+    set_reward = np.array(set_reward)
 
-        a = agent.get_action(s)
-        s2 = data_set[r_init+1, :]
-
-        p_sample = s[0:nm]
-        q_sample = -s[nm:]
-        q_sample[pv_set] = a + q_sample[pv_set]
-
-        rr = np.squeeze(cvx_fun(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm))
-        total_reward += rr
-
-        done = True
-
-        set_state.append(s)
-        set_action.append(a)
-        set_reward.append(rr)
-
-        s = s2
-
-        if done:
-
-            set_state = np.array(set_state)
-            set_action = np.array(set_action)
-            set_reward = np.array(set_reward)
-
-            agent.fit(set_state, set_action, set_reward)
-
-    return total_reward
-
-
-
+    agent.fit(set_state, set_action, set_reward)
+    return rr
 
 
 def main():
@@ -236,7 +217,7 @@ def main():
 
             x_local = data_set[no_trajectories * episode:no_trajectories * (episode + 1), :].T
             z = np.squeeze(x_local)
-            reward = run_episode(agent)
+            reward = run_episode(z, agent)
             accu_reward[episode] = reward
             print(episode, reward)
 
