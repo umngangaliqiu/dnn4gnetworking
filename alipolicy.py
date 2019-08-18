@@ -28,7 +28,9 @@ total_iteration = 100
 pf = 0.8
 alpha = 0.8
 beta = 0.2
+
 bus, branch = mpc(pf, beta)
+
 from_to = branch[:, 0:2]
 pv_bus = np.array([bus[1, 11], bus[14, 11], bus[15, 11], bus[17, 11], bus[18, 11]])
 pv_set = np.array([1, 14, 15, 17, 18])

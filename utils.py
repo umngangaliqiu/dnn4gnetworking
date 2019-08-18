@@ -42,10 +42,9 @@ def cvx_fun(p, q, r, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm):
                    ]
     prob = cp.Problem(obj, constraints)
     result = prob.solve()
+    # print(prob.value, v.value)
 
-    print(prob.value, v.value)
-
-    return
+    return result
 
 
 def construct_feed_dict(features):

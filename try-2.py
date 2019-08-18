@@ -11,7 +11,6 @@ from utils import preprocess_data
 from networkmpc import mpc
 from scipy.stats import truncnorm
 
-
 nm = 41
 no_pv = 5
 pf = 0.9
@@ -112,13 +111,20 @@ class Agent(object):
         which would train the model.
         """
         action_prob_placeholder = self.model.output
-
         action_onehot_placeholder = K.placeholder(shape=(None, self.output_dim),
                                                   name="action_onehot")
-        discount_reward_placeholder = K.placeholder(shape=(None,),
-                                                    name="discount_reward")
 
-        action_prob = K.sum(action_prob_placeholder * action_onehot_placeholder, axis=1)
+        qg_prob_placeholder = K.placeholder(shape=(None, self.output_dim/2), name="qg_values")
+
+
+        discount_reward_placeholder = K.placeholder(shape=(None,), name="discount_reward")
+
+        # mu = self.output_dim[:, 1:no_pv]
+        # var = self.output_dim[:, no_pv:]
+        # qg_prob_placeholder = truncnorm.pdf(action_onehot_placeholder, qg_min, qg_max, loc=mu, scale=var)
+
+        action_prob = action_prob_placeholder * action_onehot_placeholder
+
         log_action_prob = K.log(action_prob)
 
         loss = - log_action_prob * discount_reward_placeholder
@@ -219,9 +225,6 @@ def run_episode(agent):
             agent.fit(set_state, set_action, set_reward)
 
     return total_reward
-
-
-
 
 
 def main():
