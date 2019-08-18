@@ -1,45 +1,61 @@
-<<<<<<< HEAD
-# Import packages.
-import cvxpy as cp
+from utils import *
 import numpy as np
-
-# Generate a random SDP.
-n = 30
-p = 5
-np.random.seed(1)
-C = np.random.randn(n, n)
-A = []
-b = []
-for i in range(p):
-    A.append(np.abs(np.random.randn(n, n)))
-    b.append(np.abs(np.random.randn()))
-
-# Define and solve the CVXPY problem.
-# Create a symmetric matrix variable.
-X = cp.Variable((n, n), symmetric=True)
-# The operator >> denotes matrix inequality.
-constraints = [X >> 0]
-constraints += [
-    cp.trace(A[i]@X) == b[i] for i in range(p)
-]
-prob = cp.Problem(cp.Minimize(cp.trace(C@X)),
-                  constraints)
-prob.solve()
-
-# Print result.
-print("The optimal value is", prob.value)
-print("A solution X is")
-print(X.value)
-=======
-import gym
-import numpy as np
-
 from keras import layers
 from keras.models import Model
 from keras import backend as K
 from keras import utils as np_utils
 from keras import optimizers
 from matplotlib import pyplot as plt
+import scipy.io as sio
+from utils import preprocess_data
+from networkmpc import mpc
+
+
+nm = 41
+no_pv = 5
+total_iteration = 100
+# load mpc
+pf = 0.8
+alpha = 0.8
+beta = 0.2
+
+no_trajectories = 3
+
+bus, branch = mpc(pf, beta)
+from_to = branch[:, 0:2]
+pv_bus = np.array([bus[1, 11], bus[14, 11], bus[15, 11], bus[17, 11], bus[18, 11]])
+pv_set = np.array([1, 14, 15, 17, 18])
+qg_min, qg_max = np.float32(bus[pv_set, 12]), np.float32(bus[pv_set, 11])
+
+r = np.zeros((nm, 1))
+x = np.zeros((nm, 1))
+A_tilde = np.zeros((nm, nm+1))
+
+for i in range(nm):
+    A_tilde[i, i+1] = -1
+    for k in range(nm):
+        if branch[k, 1] == i + 1:
+            A_tilde[i, int(from_to[k, 0])] = 1
+            r[i] = branch[k, 2]
+            x[i] = branch[k, 3]
+
+a0 = A_tilde[:, 0]
+A = A_tilde[:, 1:]
+A_inv = np.linalg.inv(A)
+R = np.diagflat(r)
+X = np.diagflat(x)
+v0 = np.ones(1)
+
+# load data
+n_load = sio.loadmat("bus_47_load_data.mat")
+n_solar = sio.loadmat("bus_47_solar_data.mat")
+load_data = n_load['bus47loaddata']
+solar_data = n_solar['bus47solardata']
+
+pc, pg, qc = preprocess_data(load_data, solar_data, bus, alpha)
+p = pg - pc
+data_set_temp = np.vstack((p, qc))
+data_set = data_set_temp.T
 
 
 class Agent(object):
@@ -96,6 +112,7 @@ class Agent(object):
         which would train the model.
         """
         action_prob_placeholder = self.model.output
+
         action_onehot_placeholder = K.placeholder(shape=(None, self.output_dim),
                                                   name="action_onehot")
         discount_reward_placeholder = K.placeholder(shape=(None,),
@@ -118,28 +135,10 @@ class Agent(object):
                                    updates=updates)
 
     def get_action(self, state):
-        """Returns an action at given `state`
-        Args:
-            state (1-D or 2-D Array): It can be either 1-D array of shape (state_dimension, )
-                or 2-D array shape of (n_samples, state_dimension)
-        Returns:
-            action: an integer action value ranging from 0 to (n_actions - 1)
-        """
-        shape = state.shape
-
-        if len(shape) == 1:
-            assert shape == (self.input_dim,), "{} != {}".format(shape, self.input_dim)
-            state = np.expand_dims(state, axis=0)
-
-        elif len(shape) == 2:
-            assert shape[1] == (self.input_dim), "{} != {}".format(shape, self.input_dim)
-
-        else:
-            raise TypeError("Wrong state shape is given: {}".format(state.shape))
 
         action_prob = np.squeeze(self.model.predict(state))
-        assert len(action_prob) == self.output_dim, "{} != {}".format(len(action_prob), self.output_dim)
         return np.random.choice(np.arange(self.output_dim), p=action_prob)
+
 
     def fit(self, S, A, R):
         """Train a network
@@ -170,14 +169,11 @@ def compute_discounted_R(R, discount_rate=.99):
         discounted_r (1-D array): same shape as input `R`
             but the values are discounted
     Examples:
-        >>> R = [1, 1, 1]
-        >>> compute_discounted_R(R, .99) # before normalization
         [1 + 0.99 + 0.99**2, 1 + 0.99, 1]
     """
     discounted_r = np.zeros_like(R, dtype=np.float32)
     running_add = 0
     for t in reversed(range(len(R))):
-
         running_add = running_add * discount_rate + R[t]
         discounted_r[t] = running_add
 
@@ -186,7 +182,7 @@ def compute_discounted_R(R, discount_rate=.99):
     return discounted_r
 
 
-def run_episode(env, agent):
+def run_episode(x_sample, agent):
     """Returns an episode reward
     (1) Play until the game is done
     (2) The agent will choose an action according to the policy
@@ -197,64 +193,41 @@ def run_episode(env, agent):
     Returns:
         total_reward (int): total reward earned during the whole episode
     """
-    done = False
-    S = []
-    A = []
-    R = []
 
-    s = env.reset()
+    p_sample = x_sample[:, 0:nm]
+    qc_sample = x_sample[:, nm:]
 
-    total_reward = 0
+    for i_sample in range(no_trajectories):
 
-    while not done:
-
+        s = x_sample[i_sample, :]
         a = agent.get_action(s)
+        q_sample = -qc_sample
 
-        s2, r, done, info = env.step(a)
+        q_sample[i_sample, pv_set] = a - qc_sample[i_sample, pv_set]
+        rr = cvx_fun(p_sample[i_sample, :], q_sample[i_sample, :], r, R, X, A, A_inv, a0, v0, bus, nm)
 
-        print(s2, r, done, info)
-        total_reward += r
-
-        S.append(s)
-        A.append(a)
-        R.append(r)
-
-        s = s2
-
-        if done:
-            S = np.array(S)
-            A = np.array(A)
-            R = np.array(R)
-
-            agent.fit(S, A, R)
-
-    return total_reward
-
-
-
+        agent.fit(s, a, rr)
 
 
 def main():
     try:
         episode_no = 10000
         accu_reward = np.zeros((episode_no, 1))
-        env = gym.make("CartPole-v0")
-
-        input_dim = env.observation_space.shape[0]
-        output_dim = env.action_space.n
+        input_dim = nm * 2
+        output_dim = no_pv * 2
         agent = Agent(input_dim, output_dim, [16, 16])
 
         for episode in range(episode_no):
-            reward = run_episode(env, agent)
+
+            x_local = data_set[no_trajectories * episode:no_trajectories * (episode + 1), :]
+            reward = run_episode(x_local, agent)
             accu_reward[episode] = reward
-            # print(episode, reward)
+            print(episode, reward)
 
     finally:
-        env.close()
-        # plt.plot(accu_reward)
+        plt.plot(accu_reward)
         # plt.show()
 
 
 if __name__ == '__main__':
     main()
->>>>>>> master
