@@ -111,19 +111,26 @@ class Agent(object):
         which would train the model.
         """
         action_prob_placeholder = self.model.output
-        action_onehot_placeholder = K.placeholder(shape=(None, self.output_dim),
-                                                  name="action_onehot")
-
+        action_onehot_placeholder = K.placeholder(shape=(None, self.output_dim/2), name="action_onehot")
         qg_prob_placeholder = K.placeholder(shape=(None, self.output_dim/2), name="qg_values")
-
-
         discount_reward_placeholder = K.placeholder(shape=(None,), name="discount_reward")
 
-        # mu = self.output_dim[:, 1:no_pv]
-        # var = self.output_dim[:, no_pv:]
-        # qg_prob_placeholder = truncnorm.pdf(action_onehot_placeholder, qg_min, qg_max, loc=mu, scale=var)
+        mu = action_prob_placeholder[:, 0:no_pv]
+        var = action_prob_placeholder[:, no_pv:]
 
-        action_prob = action_prob_placeholder * action_onehot_placeholder
+        bb = mu[1]
+        print(np.shape(bb))
+
+        aa = action_onehot_placeholder
+        print(np.shape(aa))
+
+
+        # for entry in range(no_pv):
+        zz = truncnorm.pdf(.1, qg_min[1], qg_max[1], loc=mu[:, 1], scale=var[:, 1])
+            # qg_prob_placeholder[:, entry] = truncnorm.pdf(action_onehot_placeholder[:, entry], qg_min[entry],
+            #                                               qg_max[entry], loc=mu[:, entry], scale=var[:, entry])
+
+        action_prob = action_prob_placeholder
 
         log_action_prob = K.log(action_prob)
 
@@ -154,7 +161,7 @@ class Agent(object):
             raise TypeError("Wrong state shape is given: {}".format(state.shape))
 
         qg_draw = np.zeros(no_pv)
-        mean_var = np.squeeze(np.squeeze(self.model.predict(state)))
+        mean_var = np.squeeze(self.model.predict(state))
         for j in range(no_pv):
             a, b = (qg_min[j] - mean_var[j]) / np.abs(mean_var[no_pv + j]), \
                    (qg_max[j] - mean_var[j]) / np.abs(mean_var[no_pv + j])
@@ -164,24 +171,25 @@ class Agent(object):
         # action_prob = np.squeeze(self.model.predict(state))
         return qg_draw  # np.random.choice(np.arange(self.output_dim), p=action_prob)
 
-    def fit(self, S, A, R):
+    def fit(self, ss, aa, rr):
         """Train a network
         Args:
-            S (2-D Array): `state` array of shape (n_samples, state_dimension)
-            A (1-D Array): `action` array of shape (n_samples,)
+            ss (2-D Array): `state` array of shape (n_samples, state_dimension)
+            aa (1-D Array): `action` array of shape (n_samples,)
                 It's simply a list of int that stores which actions the agent chose
-            R (1-D Array): `reward` array of shape (n_samples,)
+            rr (1-D Array): `reward` array of shape (n_samples,)
                 A reward is given after each action.
+                :param aa:
         """
         action_onehot = np_utils.to_categorical(A, num_classes=self.output_dim)
-        discount_reward = R
+        discount_reward = rr
 
-        assert S.shape[1] == self.input_dim, "{} != {}".format(S.shape[1], self.input_dim)
-        assert action_onehot.shape[0] == S.shape[0], "{} != {}".format(action_onehot.shape[0], S.shape[0])
+        assert ss.shape[1] == self.input_dim, "{} != {}".format(ss.shape[1], self.input_dim)
+        assert action_onehot.shape[0] == ss.shape[0], "{} != {}".format(action_onehot.shape[0], ss.shape[0])
         assert action_onehot.shape[1] == self.output_dim, "{} != {}".format(action_onehot.shape[1], self.output_dim)
         assert len(discount_reward.shape) == 1, "{} != 1".format(len(discount_reward.shape))
 
-        self.train_fn([S, action_onehot, discount_reward])
+        self.train_fn([ss, aa, discount_reward])
 
 
 def run_episode(agent):

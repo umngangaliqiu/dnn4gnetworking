@@ -1,36 +1,3 @@
-<<<<<<< HEAD
-# Import packages.
-import cvxpy as cp
-import numpy as np
-
-# Generate a random SDP.
-n = 30
-p = 5
-np.random.seed(1)
-C = np.random.randn(n, n)
-A = []
-b = []
-for i in range(p):
-    A.append(np.abs(np.random.randn(n, n)))
-    b.append(np.abs(np.random.randn()))
-
-# Define and solve the CVXPY problem.
-# Create a symmetric matrix variable.
-X = cp.Variable((n, n), symmetric=True)
-# The operator >> denotes matrix inequality.
-constraints = [X >> 0]
-constraints += [
-    cp.trace(A[i]@X) == b[i] for i in range(p)
-]
-prob = cp.Problem(cp.Minimize(cp.trace(C@X)),
-                  constraints)
-prob.solve()
-
-# Print result.
-print("The optimal value is", prob.value)
-print("A solution X is")
-print(X.value)
-=======
 import gym
 import numpy as np
 
@@ -39,8 +6,6 @@ from keras.models import Model
 from keras import backend as K
 from keras import utils as np_utils
 from keras import optimizers
-from matplotlib import pyplot as plt
-
 
 class Agent(object):
 
@@ -257,4 +222,3 @@ def main():
 
 if __name__ == '__main__':
     main()
->>>>>>> master
