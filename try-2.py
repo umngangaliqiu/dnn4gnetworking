@@ -45,6 +45,8 @@ R = np.diagflat(r)
 X = np.diagflat(x)
 v0 = np.ones(1)
 
+
+
 # load data
 n_load = sio.loadmat("bus_47_load_data.mat")
 n_solar = sio.loadmat("bus_47_solar_data.mat")
@@ -213,7 +215,7 @@ def run_episode(agent):
         q_sample = -s[nm:]
         q_sample[pv_set] = a + q_sample[pv_set]
 
-        rr = np.squeeze(cvx_fun(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm))
+        rr = np.squeeze(cvx_dc(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm))
         total_reward += rr
 
         done = True
