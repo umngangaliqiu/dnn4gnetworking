@@ -1,23 +1,6 @@
 import numpy as np
 import cvxpy as cp
 
-
-def preprocess_data(loaddata, solardata, bus, alpha):
-    pc_max = bus[1:, 5]
-    load_data_pc = np.dot(loaddata, np.diag(pc_max))
-    qc_max = bus[1:, 7]
-    load_data_qc = np.dot(loaddata, np.diag(qc_max))
-    pg_max = bus[1:, 9]
-    solardata = np.dot(solardata, np.diag(pg_max))
-
-    pc = load_data_pc.transpose()
-    qc = load_data_qc.transpose()
-    pg = alpha*solardata
-    pg = pg.transpose()
-
-    return pc, pg, qc
-
-
 def cvx_dc(p, q, r, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm):
     v_max = 1.5*bus[1:, 3]
     v_min = .6*bus[1:, 4]
@@ -111,8 +94,3 @@ def cvx_ac(p, q, r, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm):
 
     result_ac = prob.solve()
     return result_ac
-
-
-
-
-
