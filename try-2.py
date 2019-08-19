@@ -58,10 +58,7 @@ p = pg - pc # 41*1000
 data_set_temp = np.vstack((p, qc))
 data_set = data_set_temp.T # 1000*82
 
-qq = bus[1:, 11]
-pp = p[:, 0:1]
-rr = np.squeeze(cvx_dc(pp, qq, r, R, X, A, A_inv, a0, v0, bus, nm))
-print(rr)
+
 class Agent(object):
 
     def __init__(self, input_dim, output_dim, hidden_dims=[16, 16]):

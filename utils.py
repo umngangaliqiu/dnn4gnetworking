@@ -48,13 +48,13 @@ def cvx_ac(p, q, r, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm):
     v_max = 1.5*bus[1:, 3]
     v_min = .6*bus[1:, 4]
     ap = np.hstack((np.array((nm, nm)), -a_inv.T * r_matrix))
-    bp =a_inv * p
+    bp = a_inv * p
 
     av1 = a_inv * x_matrix
     av2 = -a_inv * (2 * r_matrix * a_inv.T * r_matrix + r_matrix * r_matrix + x_matrix * x_matrix)
     av = np.hstack((2*av1, av2))
     bv = a_inv * (2 * r_matrix * a_inv.T * p - a0 * v0)
-    aq =np.hstack((a_matrix.T, x_matrix))
+    aq = np.hstack((a_matrix.T, x_matrix))
 
     an = []
     bn = []
