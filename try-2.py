@@ -120,24 +120,32 @@ class Agent(object):
         mu = action_prob_placeholder[:, 0:no_pv]
         var = action_prob_placeholder[:, no_pv:]
 
-        bb = mu[1]
-        print(np.shape(bb))
-
-        aa = action_onehot_placeholder
-        print(np.shape(aa))
+        # bb = mu[1]
+        # print(np.shape(bb))
+        #
+        # aa = action_onehot_placeholder
+        # print(np.shape(aa))
 
 
         # for entry in range(no_pv):
-        zz = truncnorm.pdf(.1, qg_min[1], qg_max[1], loc=mu[:, 1], scale=var[:, 1])
+        # zz = truncnorm.pdf(.1, qg_min[1], qg_max[1], loc=mu[:, 1], scale=var[:, 1])
             # qg_prob_placeholder[:, entry] = truncnorm.pdf(action_onehot_placeholder[:, entry], qg_min[entry],
             #                                               qg_max[entry], loc=mu[:, entry], scale=var[:, entry])
 
-        action_prob = action_prob_placeholder
 
-        log_action_prob = K.log(action_prob)
+        mean_pdf = tf.nn.sigmoid(mu) * (qg_max - qg_min) + qg_min
+        std_pdf = tf.nn.sigmoid(var) * np.sqrt(qg_max - qg_min) + 0.05  # TODO: add a little epsilon?
 
-        loss = - log_action_prob * discount_reward_placeholder
-        loss = K.mean(loss)
+        dist = tf.distributions.Normal(mean_pdf, std_pdf)
+        log_probs = dist.log_prob(action_onehot_placeholder) - tf.log(dist.cdf(qg_max) - dist.cdf(qg_min))
+        loss = tf.reduce_sum(log_probs, axis=1)
+
+        # action_prob = action_prob_placeholder
+        #
+        # log_action_prob = K.log(action_prob)
+        #
+        # loss = - log_action_prob * discount_reward_placeholder
+        # loss = K.mean(loss)
 
         adam = optimizers.Adam()
 
@@ -183,13 +191,13 @@ class Agent(object):
                 A reward is given after each action.
                 :param aa:
         """
-        action_onehot = np_utils.to_categorical(A, num_classes=self.output_dim)
+        # action_onehot = np_utils.to_categorical(A, num_classes=self.output_dim)
         discount_reward = rr
 
-        assert ss.shape[1] == self.input_dim, "{} != {}".format(ss.shape[1], self.input_dim)
-        assert action_onehot.shape[0] == ss.shape[0], "{} != {}".format(action_onehot.shape[0], ss.shape[0])
-        assert action_onehot.shape[1] == self.output_dim, "{} != {}".format(action_onehot.shape[1], self.output_dim)
-        assert len(discount_reward.shape) == 1, "{} != 1".format(len(discount_reward.shape))
+        # assert ss.shape[1] == self.input_dim, "{} != {}".format(ss.shape[1], self.input_dim)
+        # assert action_onehot.shape[0] == ss.shape[0], "{} != {}".format(action_onehot.shape[0], ss.shape[0])
+        # assert action_onehot.shape[1] == self.output_dim, "{} != {}".format(action_onehot.shape[1], self.output_dim)
+        # assert len(discount_reward.shape) == 1, "{} != 1".format(len(discount_reward.shape))
 
         self.train_fn([ss, aa, discount_reward])
 
@@ -239,7 +247,7 @@ def run_episode(agent):
 
 def main():
     try:
-        episode_no = 100
+        episode_no = 100000
         accu_reward = np.zeros((episode_no, 1))
         input_dim = nm * 2
         output_dim = no_pv * 2
@@ -248,7 +256,7 @@ def main():
         for episode in range(episode_no):
 
             x_local = data_set[no_trajectories * episode:no_trajectories * (episode + 1), :].T
-            z = np.squeeze(x_local)
+            # z = np.squeeze(x_local)
             reward = run_episode(agent)
             accu_reward[episode] = reward
             print(episode, reward)

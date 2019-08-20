@@ -88,25 +88,25 @@ def draw_sample(mean_var):
 #############################################################################
 
 
-no_trajectories = 3
+no_trajectories = 1
 H1, H3 = 50, 2*no_pv
 epoch = 1
 
 x_dim = np.shape(data_set)[1]
 inputs = Input(shape=(x_dim,))
+print(x_dim)
 
 
 # Define custom loss
-def customized_loss(tr_qg):
+def customized_loss(tr_qg, obj_loss):
     # Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
     def loss_dual(y_true, y_pred):
         log_pi = np.zeros(no_trajectories)
 
         for i_col in range(no_trajectories):
+            print(y_pred[i_col, 0:no_pv])
             log_pi[i_col] = truncnorm.pdf(tr_qg, qg_min, qg_max, loc=y_pred[i_col, 0:no_pv], scale=y_pred[i_col, no_pv:])
-        return 0 * ke.mean(y_true-y_pred) + np.sum(y_true * truncnorm.pdf(tr_qg, qg_min,
-                                                                                qg_max, loc=y_pred[i_col, 0:no_pv],
-                                             scale=y_pred[:, no_pv:]))
+        return 0 * ke.mean(y_true-y_pred) + np.sum(obj_loss * truncnorm.pdf(tr_qg, qg_min, qg_max, loc=y_pred[i_col, 0:no_pv], scale=y_pred[:, no_pv:]))
 
     return loss_dual
 
@@ -119,7 +119,7 @@ x1 = Dense(H1, activation='relu', kernel_initializer='random_uniform', bias_init
 predictions = Dense(H3, activation='linear', kernel_initializer='random_uniform', bias_initializer='zeros')(x1)
 
 model = Model(inputs=inputs, outputs=predictions)
-model.compile(optimizer='SGD', loss=customized_loss(qg_local))
+model.compile(optimizer='SGD', loss=customized_loss(qg_local, obj_local))
 
 features = np.random.normal(loc=0, scale=1.0, size=(no_trajectories, x_dim))
 labels = np.zeros((no_trajectories, 2*no_pv))
@@ -142,10 +142,10 @@ for iterations in range(total_iteration):
         q_local = -qc_local
 
         q_local[i, pv_set] = qg_local[i, :] - qc_local[i, pv_set]
-        obj_local[i] = cvx_fun(p_local[i, :], q_local[i, :], r, R, X, A, A_inv, a0, v0, bus, nm)
+        obj_local[i] = cvx_dc(p_local[i, :], q_local[i, :], r, R, X, A, A_inv, a0, v0, bus, nm)
         print(obj_local[i])
 
-    model.compile(optimizer="Adam", loss=customized_loss(qg_local))
+    model.compile(optimizer="Adam", loss=customized_loss(qg_local, obj_local))
     weights = model.get_weights()
 
     model.set_weights(weights)
