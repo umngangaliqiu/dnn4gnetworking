@@ -42,7 +42,7 @@ A_inv = np.linalg.inv(A)
 
 R_matrix = np.diagflat(r_vector)
 X_matrix = np.diagflat(x_vector)
-v0 = np.ones(1)
+v0 = np.ones((1))
 
 # load data
 n_load = sio.loadmat("bus_47_load_data.mat")
