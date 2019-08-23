@@ -2,6 +2,8 @@
   <dictionary name="qiuling">
     <words>
       <w>accu</w>
+      <w>onehot</w>
+      <w>probs</w>
     </words>
   </dictionary>
 </component>

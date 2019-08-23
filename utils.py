@@ -24,6 +24,7 @@ def cvx_dc(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm,
     p_flow = cp.Variable(nm)
     q_flow = cp.Variable(nm)
     obj_dc = cp.Minimize(r_vector.T*(np.power(p_flow, 2) + np.power(q_flow, 2)))
+    #obj_dc = cp.Minimize(r_vector.T @ p_flow)
     constraints = [a_matrix.T*p_flow == p,
                    a_matrix.T*q_flow == q,
                    v_node == 2 * a_inv * x_matrix * q_flow + 2 * a_inv * r_matrix * p_flow - a_inv.dot(a0) * v0
@@ -36,7 +37,9 @@ def cvx_dc(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm,
                    ]
 
     prob = cp.Problem(obj_dc, constraints)
+    # prob = cp.Problem(obj_dc)
     result_dc = prob.solve()
+    print(p_flow.value)
 
     return result_dc
 
@@ -94,20 +97,17 @@ def cvx_ac(p, q, r_vector, x_vector, nm, branch, v_max, v_min):
     return result_ac
 
 
-
-
 def cvx_ac_matrix(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm, v_max, v_min):
-    ap = np.hstack((np.zeros((nm, nm)), -a_inv.T @r_matrix))
-    bp = a_inv @ p
+    ap = np.hstack((np.zeros((nm, nm)), np.dot(-a_inv.T, r_matrix)))
+    bp = np.dot(a_inv, p)
 
-    av1 = a_inv @ x_matrix
-    av2 = -a_inv @ (2 * r_matrix @ a_inv.T @ r_matrix + r_matrix @ r_matrix + x_matrix @ x_matrix)
+    av1 = a_inv.dot(x_matrix)
+    av2 = np.dot(-a_inv, (2 * np.dot(np.dot(r_matrix, a_inv.T), r_matrix) + np.dot(r_matrix, r_matrix) + np.dot(x_matrix, x_matrix)))
     av = np.hstack((2*av1, av2))
-    #print(np.shape(a0.reshape(-1,1)))
-    bv = a_inv @ (2 * r_matrix @ a_inv.T @ p.reshape(-1,1) - a0.reshape(-1,1) @ v0.reshape(1,1))
-    print(np.shape(bv))
+    # print(np.shape(a0.reshape(-1,1)))
+    bv = np.dot(a_inv, 2 * np.dot(r_matrix, np.dot(a_inv.T, p)) - a0 * v0)
+    # print(np.shape(bv))
     aq = np.hstack((a_matrix.T, x_matrix))
-    zero_41 = np.zeros((1,nm))
     an = []
     bn = []
     cn = []
@@ -121,50 +121,82 @@ def cvx_ac_matrix(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, b
             an.append(np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
                                 np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
                                 np.hstack((np.zeros((1, nm)), -e_matrix[:, k].reshape(1, -1))))))
+            aaa=np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
+                                np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
+                                np.hstack((np.zeros((1, nm)), -e_matrix[:, k].reshape(1, -1)))))
+            print(aaa.shape)
 
-            bn.append(np.vstack((2 * e_matrix[:, k].reshape(1, -1)@bp,0,1)))
-            bnn=np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ bp, 0, 1))
-            print(np.shape(bnn))
+            temp = np.zeros(3)
+            temp[0] = np.dot(2 * e_matrix[:, k], bp)
+            temp[2] = 1
+            bn.append(temp)
+            # print(np.shape(temp))
 
-            cnn1 = np.vstack((np.hstack((np.zeros((1, nm)), e_matrix[:, k].reshape(1, -1)))))
-            cn.append(cnn1.reshape(-1,1))
-            #cnn=np.vstack(())
-            print(np.shape(cnn1.reshape(-1,1)))
-            dn.append(np.ones((1,1)))
+            cnn1 = np.zeros(2*nm)
+            cnn1[:nm] = np.zeros(nm)
+            cnn1[nm:] = e_matrix[k, :]
+
+            cn.append(cnn1.T)
+            # print(np.shape(cnn1.reshape(-1,1)))
+            dn.append(np.ones(1))
         else:
             for j in range(nm):
                 if a_matrix[k, j] == 1:
                     pik = j
                 break
 
-
             an.append(np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
-                           np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1,nm)))),e_matrix[:, pik].reshape(1, -1) @ av
-                           - np.hstack((np.zeros((1,nm)), e_matrix[:, k].reshape(1, -1))))))
+                                 np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
+                                 e_matrix[:, pik].reshape(1, -1) @ av
+                                 - np.hstack((np.zeros((1, nm)), e_matrix[:, k].reshape(1, -1))))))
 
-            bn.append(np.vstack((2 * e_matrix[:, k].reshape(1, -1)@bp,0,e_matrix[:, pik].reshape(1, -1)@bv)))
-            cnn2 = np.vstack((e_matrix[:, pik].reshape(1, -1) @ av + np.hstack((np.zeros((1, nm)), e_matrix[:, k].reshape(1, -1)))))
-            cn.append(cnn2.reshape(-1,1))
-            dn.append(np.vstack((e_matrix[:, pik].reshape(1, -1)@bv)))
-            dnn2=np.vstack((e_matrix[:, pik].reshape(1, -1)@bv))
-            print('dnn', np.shape(dnn2))
+            temp = np.zeros(3)
+            temp[0] = np.dot(2 * e_matrix[k, :], bp)
+            temp[2] = np.dot(e_matrix[pik, :], bv)
 
-    # cvx begin
-    q_flow = cp.Variable((nm, 1))
-    l_flow = cp.Variable((nm, 1))
-    zz = cp.hstack((q_flow.T, l_flow.T)).T
-    print(np.shape(zz))
-    obj_ac = cp.Minimize(np.hstack((np.zeros((nm, 1)).reshape(1, -1), r_vector.T)) @ zz)
+            bn.append(temp)
+            temp = np.zeros(2*nm)
+            temp[nm:] = e_matrix[k, :]
+            cnn2 = np.dot(e_matrix[pik, :], av) + temp
 
-    constraints1 = [aq @ zz == q.reshape(-1,1)]
-    constraints2 = [av @ zz + bv >= 2*v_min.reshape(-1,1)]
-    constraints3 = [av @ zz + bv <= 1.2*v_max.reshape(-1,1)]
-    soc_constraints = [cp.SOC(cn[i].T@ zz + dn[i], an[i] @ zz) for i in range(1,nm)]
-    prob = cp.Problem(obj_ac,  soc_constraints+ constraints1+constraints2+constraints3)
+            cn.append(cnn2)
+
+            dn.append(np.dot(e_matrix[:, pik], bv))
+
+    z = cp.Variable(2*nm)
+
+    r_z = np.zeros(2*nm)
+    r_z[nm:] = r_vector
+    obj_ac = cp.Minimize(r_z.T@cp.abs(z))
+
+    constraints_1 = [aq@z == q]
+    constraints_2 = [av@z + bv >= 0.1*v_min]
+    constraints_3 = [av@z + bv <= 10*v_max]
+    # d = an[1]
+    # h = bn[1]
+    # f = cn[1]
+    # g = dn[1]
+    # print(np.shape(d), np.shape(h), np.shape(f), np.shape(g))
+
+    soc_constraints = [cp.SOC(cn[i].T@z + dn[i], an[i]@z + bn[i]) for i in range(nm)]
+    prob = cp.Problem(obj_ac, soc_constraints + constraints_1 + constraints_2 + constraints_3)
 
     result_ac = prob.solve()
+    print(z.value)
+
     return result_ac
 
+def cvx_ac_matrix_simple(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm, v_max, v_min):
+    print(r_vector)
+    z = cp.Variable(nm)
+    r_z = np.zeros(2*nm)
+    r_z[nm:] = r_vector
+    obj_ac = cp.Minimize(r_vector.T*z)
+    prob = cp.Problem(obj_ac)
+    result_ac = prob.solve()
+    print(z.value)
+
+    return result_ac
 
 
 

@@ -27,25 +27,28 @@ pv_set = np.array([1, 14, 15, 17, 18])
 qg_min, qg_max = np.float32(bus[pv_set, 12]), np.float32(bus[pv_set, 11])
 v_max = bus[1:, 3]
 v_min = bus[1:, 4]
-r = np.zeros((nm, 1))
-x = np.zeros((nm, 1))
+r = np.zeros(nm)
+x = np.zeros(nm)
+
 A_tilde = np.zeros((nm, nm+1))
 
 for i in range(nm):
     A_tilde[i, i+1] = -1
     for k in range(nm):
-        if branch[k, 1] == i + 1:
-            A_tilde[i, int(from_to[k, 0])] = 1
+        if branch[k, 1] == i + 2:
+            A_tilde[i, int(from_to[k, 0])-1] = 1
             r[i] = branch[k, 2]
             x[i] = branch[k, 3]
-
+print(r)
+print(x)
 a0 = A_tilde[:, 0]
 A = A_tilde[:, 1:]
+print(A)
 A_inv = np.linalg.inv(A)
 print(A)
 R = np.diagflat(r)
 X = np.diagflat(x)
-v0 = np.ones((1))
+v0 = np.ones(1)
 
 # cvx_ac(p, q, r, x, nm, v_max, v_min)
 
@@ -214,7 +217,7 @@ def run_episode(agent):
         q_sample = -s[nm:]
         q_sample[pv_set] = a + q_sample[pv_set]
 
-        #rr = np.squeeze(cvx_ac(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
+        #rr = np.squeeze(cvx_dc(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
         #rr = np.squeeze(cvx_ac(p_sample, q_sample, r, x, nm, branch, v_max, v_min))
 
         rr = np.squeeze(cvx_ac_matrix(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
