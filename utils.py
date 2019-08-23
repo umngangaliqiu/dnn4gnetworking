@@ -5,7 +5,7 @@ import cvxpy as cp
 import tensorflow as tf
 
 
-def preprocess_data(loaddata, solardata, bus, alpha):
+def pre_process_data(loaddata, solardata, bus, alpha):
     pc_max = bus[1:, 5]
     load_data_pc = np.dot(loaddata, np.diag(pc_max))
     qc_max = bus[1:, 7]
@@ -99,7 +99,81 @@ def cvx_ac(p, q, r_vector, x_vector, nm, branch, v_max, v_min):
     return result_ac
 
 
-def cvx_ac_matrix(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm, v_max, v_min):
+# def pre_process_cvx_ac_matrix(p, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, nm):
+#     ap = np.hstack((np.zeros((nm, nm)), np.dot(-a_inv.T, r_matrix)))
+#     bp = np.dot(a_inv, p)
+#
+#     av1 = a_inv.dot(x_matrix)
+#     av2 = np.dot(-a_inv, (
+#                 2 * np.dot(np.dot(r_matrix, a_inv.T), r_matrix) + np.dot(r_matrix, r_matrix) + np.dot(x_matrix,
+#                                                                                                       x_matrix)))
+#     av = np.hstack((2 * av1, av2))
+#     # print(np.shape(a0.reshape(-1,1)))
+#     print(a_inv.shape)
+#     bv = np.dot(a_inv, 2 * np.dot(r_matrix, np.dot(a_inv.T, p)) - a0 * v0)
+#     # print(np.shape(bv))
+#     aq = np.hstack((a_matrix.T, x_matrix))
+#     an = []
+#     bn = []
+#     cn = []
+#     dn = []
+#
+#     # define socp constraints w.s.p matrix-vector
+#     e_matrix = np.eye(nm)
+#
+#     for k in range(nm):
+#         if k == 0:
+#             temp = np.zeros((3, nm * 2))
+#             temp[0, :] = 2 * np.dot(e_matrix[k, :], ap)
+#             temp[1, :nm] = 2 * e_matrix[k, :]
+#             temp[2, nm:] = -e_matrix[k, :]
+#             an.append(temp)
+#
+#             temp = np.zeros(3)
+#             temp[0] = np.dot(2 * e_matrix[:, k], bp)
+#             temp[2] = 1
+#             bn.append(temp)
+#             # print(np.shape(temp))
+#
+#             temp = np.zeros(2 * nm)
+#             temp[:nm] = np.zeros(nm)
+#             temp[nm:] = e_matrix[k, :]
+#
+#             cn.append(temp.T)
+#             # print(np.shape(cnn1.reshape(-1,1)))
+#             dn.append(np.ones(1))
+#         else:
+#             for j in range(nm):
+#                 if a_matrix[k, j] == 1:
+#                     pik = j
+#                 break
+#
+#             temp = np.zeros((3, nm * 2))
+#             temp[0, :] = 2 * np.dot(e_matrix[k, :], ap)
+#             temp[1, :nm] = 2 * e_matrix[k, :]
+#             temp[2, nm:] = np.dot(e_matrix[pik, :], av) - np.hstack((np.zeros((1, nm)), e_matrix[k, :]))
+#             an.append(temp)
+#
+#             temp = np.zeros(3)
+#             temp[0] = np.dot(2 * e_matrix[k, :], bp)
+#             temp[2] = np.dot(e_matrix[pik, :], bv)
+#             bn.append(temp)
+#
+#             temp = np.zeros(2 * nm)
+#             temp[nm:] = e_matrix[k, :]
+#             temp = np.dot(e_matrix[pik, :], av) + temp
+#             cn.append(temp)
+#
+#             dn.append(np.dot(e_matrix[:, pik], bv))
+#
+#     return aq, av, bv, an, bn, cn, dn
+
+
+
+
+
+
+def cvx_ac_matrix(p, q, r_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_max, nm, a0, v0):
     ap = np.hstack((np.zeros((nm, nm)), np.dot(-a_inv.T, r_matrix)))
     bp = np.dot(a_inv, p)
 
@@ -120,12 +194,11 @@ def cvx_ac_matrix(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, b
 
     for k in range(nm):
         if k == 0:
-            an.append(np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
-                                np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
-                                np.hstack((np.zeros((1, nm)), -e_matrix[:, k].reshape(1, -1))))))
-            # aaa=np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
-            #                     np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
-            #                     np.hstack((np.zeros((1, nm)), -e_matrix[:, k].reshape(1, -1)))))
+            temp = np.zeros((3, nm*2))
+            temp[0, :] = 2 * np.dot(e_matrix[k, :], ap)
+            temp[1, :nm] = 2 * e_matrix[k, :]
+            temp[2, nm:] = -e_matrix[k, :]
+            an.append(temp)
 
             temp = np.zeros(3)
             temp[0] = np.dot(2 * e_matrix[:, k], bp)
@@ -133,11 +206,11 @@ def cvx_ac_matrix(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, b
             bn.append(temp)
             # print(np.shape(temp))
 
-            cnn1 = np.zeros(2*nm)
-            cnn1[:nm] = np.zeros(nm)
-            cnn1[nm:] = e_matrix[k, :]
+            temp = np.zeros(2*nm)
+            temp[:nm] = np.zeros(nm)
+            temp[nm:] = e_matrix[k, :]
 
-            cn.append(cnn1.T)
+            cn.append(temp.T)
             # print(np.shape(cnn1.reshape(-1,1)))
             dn.append(np.ones(1))
         else:
@@ -150,17 +223,25 @@ def cvx_ac_matrix(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, b
                                  np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
                                  e_matrix[:, pik].reshape(1, -1) @ av
                                  - np.hstack((np.zeros((1, nm)), e_matrix[:, k].reshape(1, -1))))))
+            # temp = np.zeros((3, nm * 2))
+            # temp[0, :] = 2 * np.dot(e_matrix[k, :], ap)
+            # temp[1, :nm] = 2 * e_matrix[k, :]
+            # aaa = np.dot(e_matrix[pik, :], av)
+            # print(aaa.shape)
+            # bbb = np.hstack((np.zeros((1, nm)), e_matrix[k, :]))
+            # print(bbb.shape)
+            # temp[2, :] = np.dot(e_matrix[pik, :], av) - np.hstack((np.zeros((1, nm)), e_matrix[k, :]))
+            #an.append(temp)
 
             temp = np.zeros(3)
             temp[0] = np.dot(2 * e_matrix[k, :], bp)
             temp[2] = np.dot(e_matrix[pik, :], bv)
-
             bn.append(temp)
+
             temp = np.zeros(2*nm)
             temp[nm:] = e_matrix[k, :]
-            cnn2 = np.dot(e_matrix[pik, :], av) + temp
-
-            cn.append(cnn2)
+            temp = np.dot(e_matrix[pik, :], av) + temp
+            cn.append(temp)
 
             dn.append(np.dot(e_matrix[:, pik], bv))
 
@@ -178,21 +259,12 @@ def cvx_ac_matrix(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, b
     prob = cp.Problem(obj_ac, soc_constraints + constraints_1 + constraints_2 + constraints_3)
 
     result_ac = prob.solve()
-    # print(z.value)
+
+    #print(z.value)
 
     return result_ac
 
-def cvx_ac_matrix_simple(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, bus, nm, v_max, v_min):
-    print(r_vector)
-    z = cp.Variable(nm)
-    r_z = np.zeros(2*nm)
-    r_z[nm:] = r_vector
-    obj_ac = cp.Minimize(r_vector.T*z)
-    prob = cp.Problem(obj_ac)
-    result_ac = prob.solve()
-    print(z.value)
 
-    return result_ac
 
 
 

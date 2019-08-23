@@ -7,9 +7,13 @@ from keras import utils as np_utils
 from keras import optimizers
 from matplotlib import pyplot as plt
 import scipy.io as sio
-from utils import preprocess_data
 from networkmpc import mpc
 from scipy.stats import truncnorm
+import tensorflow as tf
+
+
+SEED=1234
+np.random.seed(SEED)
 
 nm = 41
 no_pv = 5
@@ -27,8 +31,8 @@ pv_set = np.array([1, 14, 15, 17, 18])
 qg_min, qg_max = np.float32(bus[pv_set, 12]), np.float32(bus[pv_set, 11])
 v_max = bus[1:, 3]
 v_min = bus[1:, 4]
-r = np.zeros(nm)
-x = np.zeros(nm)
+r_vector = np.zeros(nm)
+x_vector = np.zeros(nm)
 
 A_tilde = np.zeros((nm, nm+1))
 
@@ -37,17 +41,14 @@ for i in range(nm):
     for k in range(nm):
         if branch[k, 1] == i + 2:
             A_tilde[i, int(from_to[k, 0])-1] = 1
-            r[i] = branch[k, 2]
-            x[i] = branch[k, 3]
-print(r)
-print(x)
+            r_vector[i] = branch[k, 2]
+            x_vector[i] = branch[k, 3]
+
 a0 = A_tilde[:, 0]
-A = A_tilde[:, 1:]
-print(A)
-A_inv = np.linalg.inv(A)
-print(A)
-R = np.diagflat(r)
-X = np.diagflat(x)
+a_matrix = A_tilde[:, 1:]
+a_inv = np.linalg.inv(a_matrix)
+r_matrix = np.diagflat(r_vector)
+x_matrix = np.diagflat(x_vector)
 v0 = np.ones(1)
 
 # cvx_ac(p, q, r, x, nm, v_max, v_min)
@@ -58,16 +59,16 @@ n_solar = sio.loadmat("bus_47_solar_data.mat")
 load_data = n_load['bus47loaddata']
 solar_data = n_solar['bus47solardata']
 
-pc, pg, qc = preprocess_data(load_data, solar_data, bus, alpha)  # pc pg qc all 41*10000
+pc, pg, qc = pre_process_data(load_data, solar_data, bus, alpha)  # pc pg qc all 41*10000
 p = pg - pc  # 41*10000
 data_set_temp = np.vstack((p, qc))
 data_set = data_set_temp.T  # 10000*82
-h_layer1 = 16
-h_layer2 = 16
+# aq, av, bv, an, bn, cn, dn = pre_process_cvx_ac_matrix(p, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, nm)
+
 
 class Agent(object):
 
-    def __init__(self, input_dim, output_dim, hidden_dims=[h_layer1, h_layer2]):
+    def __init__(self, input_dim, output_dim, hidden_dims):
         """Gym Playing Agent
         Args:
             input_dim (int): the dimension of state.
@@ -121,6 +122,9 @@ class Agent(object):
         """
         action_prob_placeholder = self.model.output
         action_onehot_placeholder = K.placeholder(shape=(None, self.output_dim/2), name="action_onehot")
+
+        #qg_prob_placeholder = K.placeholder(shape=(None, self.output_dim/2), name="qg_values")
+
         discount_reward_placeholder = K.placeholder(shape=(None,), name="discount_reward")
 
         mu = action_prob_placeholder[:, :no_pv]
@@ -147,6 +151,7 @@ class Agent(object):
                                            discount_reward_placeholder],
                                    outputs=[],
                                    updates=updates)
+        return loss
 
     def get_action(self, state):
 
@@ -201,7 +206,7 @@ def run_episode(agent):
     set_action = []
     set_reward = []
 
-    r_init = np.random.randint(1, 10000)
+    r_init = np.random.randint(1, 10000-1)
     s = data_set[r_init, :]
     total_reward = 0
 
@@ -216,7 +221,7 @@ def run_episode(agent):
 
         # rr = np.squeeze(cvx_dc(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
         # rr = np.squeeze(cvx_ac(p_sample, q_sample, r, x, nm, branch, v_max, v_min))
-        rr = np.squeeze(cvx_ac_matrix(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
+        rr = np.squeeze(cvx_ac_matrix(p_sample, q_sample, r_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_max, nm, a0, v0))
 
         total_reward += rr
 
@@ -242,20 +247,26 @@ def run_episode(agent):
 def main():
     try:
         episode_no = 1000
-        accu_reward = np.zeros((episode_no, 1))
+        accu_reward = np.zeros(episode_no)
+        average_cost = np.zeros(episode_no)
         input_dim = nm * 2
         output_dim = no_pv * 2
-        agent = Agent(input_dim, output_dim, [16, 16])
+        hidden_dim = np.array([nm*2, nm*2, nm*2, nm*2])
+        agent = Agent(input_dim, output_dim, hidden_dim)
 
         for episode in range(episode_no):
 
             reward = run_episode(agent)
             accu_reward[episode] = reward
+            average_cost[episode] = np.sum(accu_reward)/(episode+1)
             print(episode, reward)
 
     finally:
-        plt.plot(accu_reward)
+        plt.plot(average_cost)
+        # plt.hold
+        # plt.plot()
         plt.show()
+
 
 
 if __name__ == '__main__':
