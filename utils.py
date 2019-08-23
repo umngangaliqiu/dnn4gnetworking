@@ -219,19 +219,17 @@ def cvx_ac_matrix(p, q, r_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_
                     pik = j
                 break
 
-            an.append(np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
-                                 np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
-                                 e_matrix[:, pik].reshape(1, -1) @ av
-                                 - np.hstack((np.zeros((1, nm)), e_matrix[:, k].reshape(1, -1))))))
-            # temp = np.zeros((3, nm * 2))
-            # temp[0, :] = 2 * np.dot(e_matrix[k, :], ap)
-            # temp[1, :nm] = 2 * e_matrix[k, :]
-            # aaa = np.dot(e_matrix[pik, :], av)
-            # print(aaa.shape)
-            # bbb = np.hstack((np.zeros((1, nm)), e_matrix[k, :]))
-            # print(bbb.shape)
-            # temp[2, :] = np.dot(e_matrix[pik, :], av) - np.hstack((np.zeros((1, nm)), e_matrix[k, :]))
-            #an.append(temp)
+            # an.append(np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
+            #                      np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
+            #                      e_matrix[:, pik].reshape(1, -1) @ av
+            #                      - np.hstack((np.zeros((1, nm)), e_matrix[:, k].reshape(1, -1))))))
+            temp = np.zeros((3, nm * 2))
+            temp_2 = np.zeros(nm*2)
+            temp_2[nm:] = e_matrix[k, :]
+            temp[0, :] = 2 * np.dot(e_matrix[k, :], ap)
+            temp[1, :nm] = 2 * e_matrix[k, :]
+            temp[2, :] = np.dot(e_matrix[pik, :], av) - temp_2
+            an.append(temp)
 
             temp = np.zeros(3)
             temp[0] = np.dot(2 * e_matrix[k, :], bp)
