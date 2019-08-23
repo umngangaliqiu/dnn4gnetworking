@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 import cvxpy as cp
 import tensorflow as tf
@@ -121,10 +123,9 @@ def cvx_ac_matrix(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, b
             an.append(np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
                                 np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
                                 np.hstack((np.zeros((1, nm)), -e_matrix[:, k].reshape(1, -1))))))
-            aaa=np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
-                                np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
-                                np.hstack((np.zeros((1, nm)), -e_matrix[:, k].reshape(1, -1)))))
-            print(aaa.shape)
+            # aaa=np.vstack((2 * e_matrix[:, k].reshape(1, -1) @ ap,
+            #                     np.hstack((2 * e_matrix[:, k].reshape(1, -1), np.zeros((1, nm)))),
+            #                     np.hstack((np.zeros((1, nm)), -e_matrix[:, k].reshape(1, -1)))))
 
             temp = np.zeros(3)
             temp[0] = np.dot(2 * e_matrix[:, k], bp)
@@ -167,22 +168,17 @@ def cvx_ac_matrix(p, q, r_vector, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, b
 
     r_z = np.zeros(2*nm)
     r_z[nm:] = r_vector
-    obj_ac = cp.Minimize(r_z.T@cp.abs(z))
+    obj_ac = cp.Minimize(r_z.T@z)
 
     constraints_1 = [aq@z == q]
     constraints_2 = [av@z + bv >= 0.1*v_min]
     constraints_3 = [av@z + bv <= 10*v_max]
-    # d = an[1]
-    # h = bn[1]
-    # f = cn[1]
-    # g = dn[1]
-    # print(np.shape(d), np.shape(h), np.shape(f), np.shape(g))
 
     soc_constraints = [cp.SOC(cn[i].T@z + dn[i], an[i]@z + bn[i]) for i in range(nm)]
     prob = cp.Problem(obj_ac, soc_constraints + constraints_1 + constraints_2 + constraints_3)
 
     result_ac = prob.solve()
-    print(z.value)
+    # print(z.value)
 
     return result_ac
 

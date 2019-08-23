@@ -121,10 +121,9 @@ class Agent(object):
         """
         action_prob_placeholder = self.model.output
         action_onehot_placeholder = K.placeholder(shape=(None, self.output_dim/2), name="action_onehot")
-        qg_prob_placeholder = K.placeholder(shape=(None, self.output_dim/2), name="qg_values")
         discount_reward_placeholder = K.placeholder(shape=(None,), name="discount_reward")
 
-        mu = action_prob_placeholder[:, 0:no_pv]
+        mu = action_prob_placeholder[:, :no_pv]
         var = action_prob_placeholder[:, no_pv:]
 
         mean_pdf = tf.nn.sigmoid(mu) * (qg_max - qg_min) + qg_min
@@ -135,9 +134,7 @@ class Agent(object):
         loss = tf.reduce_sum(discount_reward_placeholder * tf.log(log_probs))
 
         # action_prob = action_prob_placeholder
-        #
         # log_action_prob = K.log(action_prob)
-        #
         # loss = - log_action_prob * discount_reward_placeholder
         # loss = K.mean(loss)
 
@@ -213,13 +210,12 @@ def run_episode(agent):
         a = agent.get_action(s)
         s2 = data_set[r_init+1, :]
 
-        p_sample = s[0:nm]
+        p_sample = s[:nm]
         q_sample = -s[nm:]
         q_sample[pv_set] = a + q_sample[pv_set]
 
-        #rr = np.squeeze(cvx_dc(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
-        #rr = np.squeeze(cvx_ac(p_sample, q_sample, r, x, nm, branch, v_max, v_min))
-
+        # rr = np.squeeze(cvx_dc(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
+        # rr = np.squeeze(cvx_ac(p_sample, q_sample, r, x, nm, branch, v_max, v_min))
         rr = np.squeeze(cvx_ac_matrix(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
 
         total_reward += rr
@@ -245,7 +241,7 @@ def run_episode(agent):
 
 def main():
     try:
-        episode_no = 10000
+        episode_no = 1000
         accu_reward = np.zeros((episode_no, 1))
         input_dim = nm * 2
         output_dim = no_pv * 2
@@ -253,8 +249,6 @@ def main():
 
         for episode in range(episode_no):
 
-            # x_local = data_set[no_trajectories * episode:no_trajectories * (episode + 1), :].T
-            # z = np.squeeze(x_local)
             reward = run_episode(agent)
             accu_reward[episode] = reward
             print(episode, reward)
