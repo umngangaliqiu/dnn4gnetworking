@@ -1,17 +1,17 @@
-# Import packages.
-import cvxpy as cp
+from utils import *
 import numpy as np
-import random
-
-a = [1, 2, 3 ,4]
-b = [5, 6, 7, 8]
-
-c=np.vstack((a,b))
-q=c.T
-
-print(c.T)
-
-
-
-
-# print(np.squeeze(x, axis=2).shape)
+from keras import layers
+from keras.models import Model
+from keras import backend as K
+from keras import optimizers
+from matplotlib import pyplot as plt
+import scipy.io as sio
+from networkmpc import mpc
+from scipy.stats import truncnorm
+import tensorflow as tf
+import copy
+# SEED=1234
+# np.random.seed(SEED)
+a = np.array((1,2,3,4))
+print(a)
+print(a+1)

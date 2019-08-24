@@ -11,8 +11,8 @@ from scipy.stats import truncnorm
 import tensorflow as tf
 import copy
 
-# SEED=1234
-# np.random.seed(SEED)
+SEED = 12
+np.random.seed(SEED)
 
 nm = 41
 no_pv = 5
@@ -26,8 +26,9 @@ train_size = 8000
 
 bus, branch = mpc(pf, beta)
 from_to = branch[:, 0:2]
-pv_bus = np.array([bus[1, 11], bus[14, 11], bus[15, 11], bus[17, 11], bus[18, 11]])
+# pv_bus = np.array([bus[0, 11], bus[13, 11], bus[14, 11], bus[16, 11], bus[17, 11]])
 pv_set = np.array([1, 14, 15, 17, 18])
+cap_set = np.array([2, 31, 41]) # this numbering referred to the bus mps wich has 42 rows
 qg_min, qg_max = np.float32(bus[pv_set, 12]), np.float32(bus[pv_set, 11])
 v_max = bus[1:, 3]
 v_min = bus[1:, 4]
@@ -215,6 +216,7 @@ def run_episode(agent, episode, data_sample, is_train):
     set_reward = []
     # r_init = np.random.randint(0, train_size)
     s = copy.deepcopy(data_sample)
+    print(s)
     total_reward = 0
 
     # done = False
@@ -225,13 +227,11 @@ def run_episode(agent, episode, data_sample, is_train):
     # s2 = data_set[episode+1, :]
 
     p_sample = s[:nm]
-    q_sample = s[nm:]
-    zz1 = a - q_sample[pv_set]
-    q_sample[pv_set] = a - q_sample[pv_set]
+    q_sample = -s[nm:]
+    q_sample[pv_set - 1] = a + q_sample[pv_set - 1]
+    q_sample[cap_set - 1] = bus[cap_set - 1, 11]
 
-    # rr = np.squeeze(cvx_dc(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
-    # rr = np.squeeze(cvx_ac(p_sample, q_sample, r, x, nm, branch, v_max, v_min))
-    rr = np.squeeze(cvx_ac(p_sample, q_sample, r_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_max, nm, a0, v0))
+    rr = np.squeeze(cvx_ac(p_sample, q_sample, r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_max, nm, a0, v0, branch, bus))
 
     total_reward += rr
 
@@ -274,7 +274,7 @@ def main():
         history_q = np.ndarray((2 * episode_test_no, nm))
 
         for episode_train in range(episode_train_no):
-            data_train_sample = np.squeeze(data_set_test[episode_train, :])
+            data_train_sample = np.squeeze(data_set_train[episode_train, :])
             reward_train = run_episode(agent, episode_train, data_train_sample, is_train=True)
             accu_reward_train[episode_train] = reward_train
             average_cost_train[episode_train] = np.sum(accu_reward_train)/(episode_train+1)
@@ -286,6 +286,8 @@ def main():
             accu_reward_test[episode_test] = reward_test
             average_cost_test[episode_test] = np.sum(accu_reward_test)/(episode_test+1)
 
+            zz = p_test.T[episode_test, :]
+            zz2 = qc_test.T[episode_test, :]
             accu_reward_cvx_qg[episode_test] = cvx_ac_qg(p_test.T[episode_test, :], qc_test.T[episode_test, :], r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_max, nm, a0, v0, branch, bus)
             average_cost_cvx_qg[episode_test] = np.sum(accu_reward_cvx_qg)/(episode_test+1)
             history_q[2 * episode_test, :] = qc_test.T[episode_test, :]

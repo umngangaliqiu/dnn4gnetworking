@@ -51,7 +51,7 @@ def cvx_ac(p, q, r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min,
     q_flow_child_sum = np.zeros(nm, dtype=object)
 
     constr = []
-    # constr1 = []
+    constr1 = []
     left = []
     right = []
 
@@ -107,8 +107,8 @@ def cvx_ac(p, q, r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min,
     constr = constr + [v_node >= np.power(v_min, 2)]
     constr = constr + [v_node <= np.power(v_max, 2)]
     constr = constr + [left[k] <= right[k] for k in range(nm)]
-    # constr1 = [q_flow[0] <= bus[0, 5], p_flow[0] >= bus[0, 6], q_flow[0] <= bus[0, 7], q_flow[0] >= bus[0, 8]]
-    constraints = constr # + constr1
+    constr1 = [q_flow[0] <= bus[0, 5], p_flow[0] >= bus[0, 6], q_flow[0] <= bus[0, 7], q_flow[0] >= bus[0, 8]]
+    constraints = constr + constr1
     prob = cp.Problem(obj_ac, constraints)
     result_ac = prob.solve()
     print(result_ac)
@@ -125,7 +125,7 @@ def cvx_dc_qg(p, qc, r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_
     q_flow_child_sum = np.zeros(nm, dtype=object)
 
     constr = []
-    # constr1 = []
+    constr1 = []
 
     qg = cp.Variable(nm)
     p_flow = cp.Variable(nm)
@@ -186,6 +186,7 @@ def cvx_ac_qg(p, qc, r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_
     q_flow = cp.Variable(nm)
     v_node = cp.Variable(nm)
     l_line = cp.Variable(nm)
+
     obj_ac = cp.Minimize(r_vector.T@l_line)
 
     for i in range(nm):
@@ -233,7 +234,7 @@ def cvx_ac_qg(p, qc, r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_
     constr = constr + [v_node >= np.power(v_min, 2)]
     constr = constr + [v_node <= np.power(v_max, 2)]
     constr = constr + [left[k] <= right[k] for k in range(nm)]
-    constr1 = [qg >= bus[1:, 12], qg <= bus[1:, 11]]
+    constr1 = [q_flow[0] <= bus[0, 5], p_flow[0] >= bus[0, 6], q_flow[0] <= bus[0, 7], q_flow[0] >= bus[0, 8], qg >= bus[1:, 12], qg <= bus[1:, 11]]
     constraints = constr + constr1
     prob = cp.Problem(obj_ac, constraints)
     result_ac = prob.solve()
