@@ -239,7 +239,7 @@ def cvx_ac_qg(p, qc, r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_
     result_ac = prob.solve()
     # print('Neural network cost is:', result_ac)
 
-    return result_ac
+    return result_ac #, qg.value
 
 
 # def cvx_ac_matrix(p, q, r_vector, r_matrix, a_inv, a_matrix, x_matrix, v_min, v_max, nm, a0, v0, bus):

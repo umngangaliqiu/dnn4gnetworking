@@ -179,6 +179,7 @@ class Agent(object):
 
         qg_draw = np.zeros(no_pv)
         mean_var = np.squeeze(self.model.predict(state))
+
         for j in range(no_pv):
             a, b = (qg_min[j] - mean_var[j]) / np.abs(mean_var[no_pv + j]), \
                    (qg_max[j] - mean_var[j]) / np.abs(mean_var[no_pv + j])
@@ -216,23 +217,19 @@ def run_episode(agent, episode, data_sample, is_train):
     set_reward = []
     # r_init = np.random.randint(0, train_size)
     s = copy.deepcopy(data_sample)
-    print(s)
     total_reward = 0
 
     # done = False
-
     # while not done:
 
     a = agent.get_action(s)  # No_pv
-    # s2 = data_set[episode+1, :]
 
     p_sample = s[:nm]
     q_sample = -s[nm:]
     q_sample[pv_set - 1] = a + q_sample[pv_set - 1]
-    q_sample[cap_set - 1] = bus[cap_set - 1, 11]
+    q_sample[cap_set - 1] = bus[cap_set, 11]
 
     rr = np.squeeze(cvx_ac(p_sample, q_sample, r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_max, nm, a0, v0, branch, bus))
-
     total_reward += rr
 
     set_state.append(s)
@@ -254,8 +251,8 @@ def run_episode(agent, episode, data_sample, is_train):
 
 def main():
     try:
-        episode_train_no = np.minimum(train_size, 100)
-        episode_test_no = np.minimum(train_size, 100)
+        episode_train_no = np.minimum(train_size, 1000)
+        episode_test_no = np.minimum(train_size, 500)
 
         accu_reward_train = np.zeros(episode_train_no)
         average_cost_train = np.zeros(episode_train_no)
@@ -293,6 +290,7 @@ def main():
             history_q[2 * episode_test, :] = qc_test.T[episode_test, :]
             history_q[2 * episode_test + 1, :] = data_set_test[episode_test, nm:]
             print(episode_test, reward_test)
+            print("cvx result is \n", accu_reward_cvx_qg[episode_test])
 
     finally:
         sio.savemat("data/cost_train.mat", {"foo": average_cost_train})
