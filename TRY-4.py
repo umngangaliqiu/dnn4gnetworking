@@ -71,12 +71,15 @@ solar_data_test = solar_data[permutation_indices[train_size:], :]
 
 
 
-pc, pg, qc = pre_process_data(load_data_train, solar_data_train, bus, alpha)  # pc pg qc all 41*10000
-p = pg - pc  # 41*10000
-data_set_temp = np.vstack((p, qc))
-data_set = data_set_temp.T  # 10000*82
-# aq, av, bv, an, bn, cn, dn = pre_process_cvx_ac_matrix(p, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, nm)
-
+pc_train, pg_train, qc_train = pre_process_data(load_data_train, solar_data_train, bus, alpha)  # pc_train pg_train qc_train all 41*10000
+p_train = pg_train - pc_train  # 41*10000
+data_set_temp_train = np.vstack((p_train, qc_train))
+data_set_train = data_set_temp_train.T  # 10000*82
+# aq, av, bv, an, bn, cn, dn = pre_process_cvx_ac_matrix(p_train, r_matrix, x_matrix, a_matrix, a_inv, a0, v0, nm)
+pc_test, pg_test, qc_test = pre_process_data(load_data_test, solar_data_test, bus, alpha)  # pc_train pg_train qc_train all 41*10000
+p_test = pg_test - pc_test  # 41*10000
+data_set_temp_test = np.vstack((p_test, qc_test))
+data_set_test = data_set_temp_test.T  # 10000*82
 
 class Agent(object):
 
@@ -210,71 +213,92 @@ class Agent(object):
     #     self.train_fn([ss, aa, discount_reward])
 
 
-def run_episode(agent):
+def run_episode(agent, episode, data_set, is_train):
 
-    done = False
 
     set_state = []
     set_action = []
     set_reward = []
 
-    r_init = np.random.randint(0, train_size)
-    s = data_set[r_init, :]
+    #r_init = np.random.randint(0, train_size)
+    s = data_set[episode, :]
     total_reward = 0
 
-    while not done:
+    # done = False
 
-        a = agent.get_action(s)  # No_pv
-        s2 = data_set[r_init+1, :]
+    # while not done:
 
-        p_sample = s[:nm]
-        q_sample = s[nm:]
-        q_sample[pv_set] = a - q_sample[pv_set]
+    a = agent.get_action(s)  # No_pv
+    s2 = data_set[episode+1, :]
 
-        # rr = np.squeeze(cvx_dc(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
-        # rr = np.squeeze(cvx_ac(p_sample, q_sample, r, x, nm, branch, v_max, v_min))
-        rr = np.squeeze(cvx_ac(p_sample, q_sample, r_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_max, nm, a0, v0))
+    p_sample = s[:nm]
+    q_sample = s[nm:]
+    q_sample[pv_set] = a - q_sample[pv_set]
 
-        total_reward += rr
+    # rr = np.squeeze(cvx_dc(p_sample, q_sample, r, R, X, A, A_inv, a0, v0, bus, nm, v_max, v_min))
+    # rr = np.squeeze(cvx_ac(p_sample, q_sample, r, x, nm, branch, v_max, v_min))
+    rr = np.squeeze(cvx_ac(p_sample, q_sample, r_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_max, nm, a0, v0))
 
-        done = True
+    total_reward += rr
 
-        set_state.append(s)
-        set_action.append(a)
-        set_reward.append(rr)
 
-        s = s2
+    set_state.append(s)
+    set_action.append(a)
+    set_reward.append(rr)
 
-        if done:
+    s = s2
 
-            set_state = np.array(set_state)
-            set_action = np.array(set_action)
-            set_reward = np.array(set_reward)
+    # done = True
 
-            agent.train_fn([set_state, set_action, set_reward])
+    if is_train:
+        set_state = np.array(set_state)
+        set_action = np.array(set_action)
+        set_reward = np.array(set_reward)
+        agent.train_fn([set_state, set_action, set_reward])
+
 
     return total_reward
 
 
 def main():
     try:
-        episode_no = 1000
-        accu_reward = np.zeros(episode_no)
-        average_cost = np.zeros(episode_no)
+        episode_train_no = np.minimum(train_size, 1000)
+        episode_test_no = np.minimum(train_size, 1000)
+
+        accu_reward_train = np.zeros(episode_train_no)
+        average_cost_train = np.zeros(episode_train_no)
+
+        accu_reward_test = np.zeros(episode_test_no)
+        average_cost_test = np.zeros(episode_test_no)
+
+        accu_reward_cvx_qg = np.zeros(episode_test_no)
+        average_cost_cvx_qg = np.zeros(episode_test_no)
+
         input_dim = nm * 2
         output_dim = no_pv * 2
         hidden_dim = np.array([nm*2, nm*2, nm*2, nm*2])
         agent = Agent(input_dim, output_dim, hidden_dim)
 
-        for episode in range(episode_no):
+        for episode_train in range(episode_train_no):
 
-            reward = run_episode(agent)
-            accu_reward[episode] = reward
-            average_cost[episode] = np.sum(accu_reward)/(episode+1)
-            print(episode, reward)
+            reward_train = run_episode(agent, episode_train, data_set_train, is_train=True)
+            accu_reward_train[episode_train] = reward_train
+            average_cost_train[episode_train] = np.sum(accu_reward_train)/(episode_train+1)
+            print(episode_train, reward_train)
+
+        for episode_test in range(episode_test_no):
+            reward_test = run_episode(agent, episode_test, data_set_test, is_train=False)
+            accu_reward_test[episode_test] = reward_test
+            average_cost_test[episode_test] = np.sum(accu_reward_test)/(episode_test+1)
+
+            accu_reward_cvx_qg[episode_test] = cvx_ac_qg(p_test.T[episode_test, :], qc_test.T[episode_test, :] , r_vector, x_vector, a_inv, a_matrix, r_matrix, x_matrix, v_min, v_max, nm, a0, v0, branch)
+            average_cost_cvx_qg[episode_test] = np.sum(accu_reward_cvx_qg)/(episode_test+1)
+            print(episode_test, reward_test)
 
     finally:
-        plt.plot(average_cost)
+        plt.plot(average_cost_train, 'ro')
+        plt.plot(average_cost_test, 'bo')
+        plt.plot(average_cost_cvx_qg, 'ko')
         # plt.hold
         # plt.plot()
         plt.show()

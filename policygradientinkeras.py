@@ -12,6 +12,7 @@ from keras import optimizers
 from matplotlib import pyplot as plt
 
 
+
 class Agent(object):
 
     def __init__(self, input_dim, output_dim, hidden_dims=[32, 32]):
